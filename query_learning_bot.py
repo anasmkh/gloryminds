@@ -105,13 +105,13 @@ def search_qdrant(client: QdrantClient, question: str, grade: str, subject: str,
 
     query_filter = Filter(must=conditions) if conditions else None
 
-    results = client.search(
+    response = client.query_points(
         collection_name=COLLECTION_NAME,
-        query_vector=vector,
+        query=vector,
         query_filter=query_filter,
         limit=top_k,
     )
-    return results
+    return response.points
 
 
 def generate_answer(question: str, results) -> str:
@@ -141,8 +141,8 @@ At the end, briefly note which grade/subject/chapter the answer came from."""
 
 def main(question: str):
     qdrant_url = os.environ.get("QDRANT_URL")
-    qdrant_api_key = os.environ.get("QDRANT_API_KEY")
-    if not qdrant_url or not qdrant_api_key:
+    # qdrant_api_key = os.environ.get("QDRANT_API_KEY")
+    if not qdrant_url :
         sys.exit("Missing QDRANT_URL or QDRANT_API_KEY in your .env file.")
 
     print(f"Question: {question}\n")
@@ -151,7 +151,7 @@ def main(question: str):
     classification = classify_question(question)
     print(f"  -> grade={classification['grade']}, subject={classification['subject']}\n")
 
-    client = QdrantClient(url=qdrant_url, api_key=qdrant_api_key, timeout=60)
+    client = QdrantClient(url=qdrant_url, timeout=60)
 
     print("Searching Qdrant...")
     results = search_qdrant(client, question, classification["grade"], classification["subject"])
