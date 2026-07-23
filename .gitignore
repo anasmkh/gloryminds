@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+venv/
+.venv/
+env/
+.env
+.env.local
+*.db
+*.sqlite3
+.DS_Store
+
+
+raw_pdfs/
+processed_data/
+chunks.jsonl
