@@ -90,7 +90,7 @@ def main(input_path: Path, collection_name: str):
             continue
 
         payload = dict(chunk["metadata"])
-        payload["text"] = text  # keep the text itself in payload so we can display it later
+        payload["text"] = text  
 
         batch_points.append(PointStruct(id=chunk["id"], vector=vector, payload=payload))
 
