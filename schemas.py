@@ -38,6 +38,7 @@ class MessageOut(BaseModel):
 class ChatOut(BaseModel):
     id: str
     title: str
+    bot_type: Optional[str] = None
     created_at: datetime
 
     class Config:

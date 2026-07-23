@@ -31,6 +31,7 @@ class Chat(Base):
     id = Column(String, primary_key=True, default=gen_uuid)
     user_id = Column(String, ForeignKey("users.id"), nullable=False)
     title = Column(String, default="New Chat")
+    bot_type = Column(String, nullable=True)  # "psychological" or "learning", set once on chat creation
     created_at = Column(DateTime, default=datetime.utcnow)
 
     owner = relationship("User", back_populates="chats")

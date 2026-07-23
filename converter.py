@@ -1,32 +1,3 @@
-"""
-Step 1: Convert all grade/subject PDFs into Markdown files.
-
-Expected input layout:
-    raw_pdfs/
-        7th/
-            math/
-                chapter1.pdf
-                chapter2.pdf
-            arabic/
-                ...
-        8th/
-            ...
-        9th/
-            ...
-
-Output layout (mirrors input):
-    processed_md/
-        7th/
-            math/
-                chapter1.md
-                chapter2.md
-            ...
-
-Usage:
-    python convert_pdfs_to_md.py --input raw_pdfs --output processed_md
-    python convert_pdfs_to_md.py --input raw_pdfs --output processed_md --only "8th/math/chapter1.pdf"
-"""
-
 import argparse
 from pathlib import Path
 

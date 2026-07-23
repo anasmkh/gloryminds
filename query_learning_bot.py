@@ -114,6 +114,49 @@ def search_qdrant(client: QdrantClient, question: str, grade: str, subject: str,
     return response.points
 
 
+def build_contextual_query(message: str, memory: list) -> str:
+    """Fold in recent user turns so follow-ups like 'what about chapter 2?'
+    still retrieve the right material on their own. `memory` is a list of
+    {"role", "content"} dicts, most recent last."""
+    if not memory:
+        return message
+    last_user_turns = [m["content"] for m in memory if m["role"] == "user"][-2:]
+    if not last_user_turns:
+        return message
+    return " ".join(last_user_turns) + " " + message
+
+
+def generate_answer_with_memory(question: str, results, memory: list) -> str:
+    """Same as generate_answer(), but includes prior conversation turns so
+    follow-up questions stay coherent, while still grounding facts only in
+    the retrieved context."""
+    if not results:
+        return "I couldn't find anything relevant in the curriculum material for this question."
+
+    context_blocks = []
+    for r in results:
+        p = r.payload
+        label = f"[Grade {p.get('grade')} | {p.get('subject')} | {p.get('chapter_title') or 'N/A'}]"
+        context_blocks.append(f"{label}\n{p.get('text', '')}")
+    context = "\n\n---\n\n".join(context_blocks)
+
+    system = """You are a helpful assistant for parents, answering questions about their
+child's school curriculum. Use ONLY the provided context to answer. If the context
+doesn't fully answer the question, say so honestly rather than inventing facts.
+Use the conversation history to understand follow-up questions and maintain
+continuity, but always ground the actual answer in the provided context.
+At the end, briefly note which grade/subject/chapter the answer came from."""
+
+    messages = [{"role": "system", "content": system}]
+    messages.extend(memory)
+    messages.append({
+        "role": "user",
+        "content": f"Context from the curriculum:\n\n{context}\n\n---\n\nParent's question: {question}",
+    })
+
+    return ollama_chat(messages)
+
+
 def generate_answer(question: str, results) -> str:
     if not results:
         return "I couldn't find anything relevant in the curriculum material for this question."
@@ -141,8 +184,8 @@ At the end, briefly note which grade/subject/chapter the answer came from."""
 
 def main(question: str):
     qdrant_url = os.environ.get("QDRANT_URL")
-    # qdrant_api_key = os.environ.get("QDRANT_API_KEY")
-    if not qdrant_url :
+    qdrant_api_key = os.environ.get("QDRANT_API_KEY")
+    if not qdrant_url or not qdrant_api_key:
         sys.exit("Missing QDRANT_URL or QDRANT_API_KEY in your .env file.")
 
     print(f"Question: {question}\n")
@@ -151,7 +194,7 @@ def main(question: str):
     classification = classify_question(question)
     print(f"  -> grade={classification['grade']}, subject={classification['subject']}\n")
 
-    client = QdrantClient(url=qdrant_url, timeout=60)
+    client = QdrantClient(url=qdrant_url, api_key=qdrant_api_key, timeout=60)
 
     print("Searching Qdrant...")
     results = search_qdrant(client, question, classification["grade"], classification["subject"])

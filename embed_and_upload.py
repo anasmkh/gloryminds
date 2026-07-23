@@ -1,20 +1,3 @@
-"""
-Step 3: Embed every chunk in chunks.jsonl using Ollama's bge-m3 model,
-and upload to a Qdrant Cloud collection with grade/subject/etc as
-filterable payload fields.
-
-Requires:
-    ollama pull bge-m3
-    pip install qdrant-client requests
-
-Env vars required:
-    QDRANT_URL       e.g. https://xxxxx.cloud.qdrant.io
-    QDRANT_API_KEY
-
-Usage:
-    python embed_and_upload.py --input chunks.jsonl --collection school_materials
-"""
-
 import argparse
 import json
 import os
