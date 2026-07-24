@@ -27,7 +27,7 @@ from qdrant_client.models import Filter, FieldCondition, MatchValue
 
 load_dotenv()
 
-OLLAMA_BASE_URL = "http://localhost:11434"
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 EMBED_MODEL = "bge-m3"
 CHAT_MODEL = "gpt-oss:120b-cloud"
 COLLECTION_NAME = "school_materials"
@@ -79,7 +79,7 @@ Do not guess wildly — only classify grade/subject if reasonably confident."""
     ])
 
     try:
-        # Strip potential markdown code fences before parsing
+        
         cleaned = raw.strip().strip("`").replace("json\n", "", 1) if raw.strip().startswith("```") else raw
         result = json.loads(cleaned)
     except json.JSONDecodeError:
@@ -127,9 +127,6 @@ def build_contextual_query(message: str, memory: list) -> str:
 
 
 def generate_answer_with_memory(question: str, results, memory: list) -> str:
-    """Same as generate_answer(), but includes prior conversation turns so
-    follow-up questions stay coherent, while still grounding facts only in
-    the retrieved context."""
     if not results:
         return "I couldn't find anything relevant in the curriculum material for this question."
 
@@ -184,9 +181,8 @@ At the end, briefly note which grade/subject/chapter the answer came from."""
 
 def main(question: str):
     qdrant_url = os.environ.get("QDRANT_URL")
-    qdrant_api_key = os.environ.get("QDRANT_API_KEY")
-    if not qdrant_url or not qdrant_api_key:
-        sys.exit("Missing QDRANT_URL or QDRANT_API_KEY in your .env file.")
+    if not qdrant_url:
+        sys.exit("Missing QDRANT_URL o .env file.")
 
     print(f"Question: {question}\n")
 
@@ -194,7 +190,7 @@ def main(question: str):
     classification = classify_question(question)
     print(f"  -> grade={classification['grade']}, subject={classification['subject']}\n")
 
-    client = QdrantClient(url=qdrant_url, api_key=qdrant_api_key, timeout=60)
+    client = QdrantClient(url=qdrant_url, timeout=60)
 
     print("Searching Qdrant...")
     results = search_qdrant(client, question, classification["grade"], classification["subject"])

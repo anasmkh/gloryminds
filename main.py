@@ -4,8 +4,6 @@ import os
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from llama_index.core import Settings
@@ -17,7 +15,6 @@ from qdrant_client import QdrantClient
 
 import models
 import schemas
-from auth import create_access_token, get_current_user, hash_password, verify_password
 from database import Base, engine, get_db
 from intent_router import classify_intent
 from query_learning_bot import (
@@ -29,34 +26,46 @@ from query_learning_bot import (
 
 load_dotenv()
 
-# ---------------------------------------------------------------------------
-# Setup
-# ---------------------------------------------------------------------------
 
-Base.metadata.create_all(bind=engine)  # creates users/chats/messages tables
+
+Base.metadata.create_all(bind=engine)  
+DEFAULT_USERNAME = "test_user"
+
+
+def get_or_create_default_user(db: Session) -> models.User:
+    user = db.query(models.User).filter(models.User.username == DEFAULT_USERNAME).first()
+    if user:
+        return user
+    user = models.User(
+        username=DEFAULT_USERNAME,
+        email="test_user@example.com",
+        hashed_password="unused",
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
 
 app = FastAPI(title="Chatbot API")
+
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 
 Settings.llm = Ollama(
     model="gpt-oss:120b-cloud",
     request_timeout=120.0,
-    base_url="http://localhost:11434",
+    base_url=OLLAMA_BASE_URL,
 )
 
 with open("prompt.txt", "r") as f:
     system_prompt = f.read()
 
 qdrant_client = None
-if os.environ.get("QDRANT_URL") and os.environ.get("QDRANT_API_KEY"):
+if os.environ.get("QDRANT_URL") :
     qdrant_client = QdrantClient(
         url=os.environ["QDRANT_URL"],
-        api_key=os.environ["QDRANT_API_KEY"],
         timeout=60,
     )
 
-# --- Memory buffer settings ------------------------------------------------
-# Keep only the last N turns of DB-stored history when building context for
-# either bot, so the prompt sent to the LLM stays bounded on long chats.
 MAX_TURNS = 8
 MAX_MESSAGES = MAX_TURNS * 2
 
@@ -87,55 +96,15 @@ def build_chat_engine(db_messages: List[models.Message]) -> SimpleChatEngine:
     )
 
 
-# ---------------------------------------------------------------------------
-# Auth endpoints
-# ---------------------------------------------------------------------------
 
-@app.post("/register", response_model=schemas.UserOut, status_code=status.HTTP_201_CREATED)
-async def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
-    user = models.User(
-        username=user_in.username,
-        email=user_in.email,
-        hashed_password=hash_password(user_in.password),
-    )
-    db.add(user)
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=400, detail="Username or email already registered")
-    db.refresh(user)
-    return user
-
-
-@app.post("/login", response_model=schemas.Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.username == form_data.username).first()
-    if not user or not verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    access_token = create_access_token(data={"sub": user.id})
-    return {"access_token": access_token, "token_type": "bearer"}
-
-
-@app.get("/me", response_model=schemas.UserOut)
-async def me(current_user: models.User = Depends(get_current_user)):
-    return current_user
-
-
-# ---------------------------------------------------------------------------
-# Chat endpoints
-# ---------------------------------------------------------------------------
 
 @app.post("/chat", response_model=schemas.ChatDetailOut)
 async def chat(
     request: schemas.ChatRequest,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
 ):
+    current_user = get_or_create_default_user(db)
+
     if request.chat_id:
         chat_obj = (
             db.query(models.Chat)
@@ -144,9 +113,9 @@ async def chat(
         )
         if not chat_obj:
             raise HTTPException(status_code=404, detail="Chat not found")
-        bot_type = chat_obj.bot_type or "psychological"  # fallback for old rows predating this column
+        bot_type = chat_obj.bot_type or "psychological"  
     else:
-        # New chat: classify intent once, then lock it in for this chat's lifetime.
+        
         routing = classify_intent(request.message)
         bot_type = routing["intent"]
         chat_obj = models.Chat(
@@ -166,7 +135,7 @@ async def chat(
         answer_text = str(response)
     else:  # "learning"
         if qdrant_client is None:
-            answer_text = "The learning assistant isn't available right now (Qdrant is not configured)."
+            answer_text = "The learning assistant isn't available right now."
         else:
             contextual_query = build_contextual_query(request.message, memory)
             classification = classify_question(contextual_query)
@@ -188,10 +157,8 @@ async def chat(
 
 
 @app.get("/chats", response_model=List[schemas.ChatOut])
-async def list_chats(
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
-):
+async def list_chats(db: Session = Depends(get_db)):
+    current_user = get_or_create_default_user(db)
     return (
         db.query(models.Chat)
         .filter(models.Chat.user_id == current_user.id)
@@ -204,8 +171,8 @@ async def list_chats(
 async def get_chat(
     chat_id: str,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
 ):
+    current_user = get_or_create_default_user(db)
     chat_obj = (
         db.query(models.Chat)
         .filter(models.Chat.id == chat_id, models.Chat.user_id == current_user.id)
@@ -220,8 +187,8 @@ async def get_chat(
 async def delete_chat(
     chat_id: str,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
 ):
+    current_user = get_or_create_default_user(db)
     chat_obj = (
         db.query(models.Chat)
         .filter(models.Chat.id == chat_id, models.Chat.user_id == current_user.id)

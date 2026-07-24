@@ -8,11 +8,12 @@ Usage (standalone test):
 """
 
 import json
+import os
 import sys
 
 import requests
 
-OLLAMA_BASE_URL = "http://localhost:11434"
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 CHAT_MODEL = "gpt-oss:120b-cloud"
 
 VALID_INTENTS = ["psychological", "learning"]

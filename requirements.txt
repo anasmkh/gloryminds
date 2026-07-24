@@ -1,9 +1,10 @@
 fastapi
 uvicorn[standard]
 sqlalchemy
-passlib[bcrypt]
-python-jose[cryptography]
 python-multipart
-pydantic[email]
+pydantic
+python-dotenv
+requests
+qdrant-client
 llama-index-core
 llama-index-llms-ollama
