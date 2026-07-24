@@ -1,108 +1,122 @@
+
+import time
+
 import gradio as gr
 import requests
 
-API_URL = "http://localhost:8000"
+API_BASE_URL = "http://localhost:8000"  # assumes your Docker container publishes port 8000 -> 8000
+STREAM_DELAY = 0.1  # seconds between words; tune for faster/slower reveal
+
+INTENT_LABELS = {
+    "psychological": " **تم اختيار: المساعد النفسي** _(Psychological Assistant)_",
+    "learning": " **تم اختيار: المساعد التعليمي** _(Learning Assistant)_",
+}
 
 
-def chat(message, history, chat_id):
-    payload = {
-        "message": message,
-    }
+_session = {"chat_id": None}
+
+
+def extract_text(content) -> str:
+    """Gradio 6.x sometimes represents message content as a list of parts
+    (e.g. [{"text": "hi", "type": "text"}]) rather than a plain string, even
+    for plain text input. Normalize either shape down to plain text."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for part in content:
+            if isinstance(part, dict) and "text" in part:
+                parts.append(part["text"])
+            elif isinstance(part, str):
+                parts.append(part)
+        return " ".join(parts)
+    return str(content)
+
+
+def call_chat_api(message: str) -> dict:
+    payload = {"message": message}
+    if _session["chat_id"]:
+        payload["chat_id"] = _session["chat_id"]
+
+    print("SENDING PAYLOAD:", payload)  # temporary debug line
+
+    resp = requests.post(f"{API_BASE_URL}/chat", json=payload, timeout=120)
+
+    if not resp.ok:
+        print("ERROR STATUS:", resp.status_code)
+        print("ERROR BODY:", resp.text)  # temporary debug lines
+
+    resp.raise_for_status()
+    data = resp.json()
+    _session["chat_id"] = data["id"]
+    return data
+
+
+def user_submit(message: str, history: list):
+    if not message.strip():
+        return history, message
+    history = history + [{"role": "user", "content": message}]
+    return history, ""
+
+
+def bot_respond(history: list):
+    if not history or history[-1]["role"] != "user":
+        return
+
+    user_message = extract_text(history[-1]["content"])
 
     try:
-        response = requests.post(
-            f"{API_URL}/chat",
-            json=payload,
-            timeout=300,
-        )
+        data = call_chat_api(user_message)
+    except requests.exceptions.RequestException as e:
+        history.append({"role": "assistant", "content": f"⚠️ Could not reach the API: {e}"})
+        yield history
+        return
 
-        response.raise_for_status()
-        data = response.json()
+    bot_type = data.get("bot_type")
+    label = INTENT_LABELS.get(bot_type, f"🧭 **Routed to: {bot_type}**")
 
-        # Save chat id after first message
-        chat_id = data["id"]
+    assistant_messages = [m for m in data["messages"] if m["role"] == "assistant"]
+    answer = assistant_messages[-1]["content"] if assistant_messages else "(no response)"
 
-        answer = data["messages"][-1]["content"]
+    header = f"{label}\n\n---\n\n"
 
-    except Exception as e:
-        answer = f"❌ Error:\n{e}"
+    # Show the routing decision immediately, on its own, before any of the
+    # answer appears — this is the "tell the user which bot first" behavior.
+    history.append({"role": "assistant", "content": header})
+    yield history
+    time.sleep(0.4)  # brief pause so the routing label is clearly seen first
 
-    history.append(
-        {
-            "role": "user",
-            "content": message,
-        }
+    # Then stream the answer word by word underneath the (already-shown) label
+    words = answer.split(" ")
+    partial = ""
+    for i, word in enumerate(words):
+        partial += (" " if i > 0 else "") + word
+        history[-1]["content"] = header + partial
+        yield history
+        time.sleep(STREAM_DELAY)
+
+
+def new_conversation():
+    _session["chat_id"] = None
+    return []
+
+
+with gr.Blocks(title="Family Support & Learning Assistant") as demo:
+    gr.Markdown(
+        "# Family Support & Learning Assistant\n"
+        "Ask about your child's schoolwork, or share a parenting/emotional concern — "
+        f"you'll be routed to the right assistant automatically."
     )
+    chatbot = gr.Chatbot(height=500)
+    msg = gr.Textbox(placeholder="Type your message and press Enter...", show_label=False)
+    new_chat_btn = gr.Button("🔄 New Conversation")
 
-    history.append(
-        {
-            "role": "assistant",
-            "content": answer,
-        }
+    msg.submit(user_submit, [msg, chatbot], [chatbot, msg], queue=False).then(
+        bot_respond, chatbot, chatbot
     )
+    new_chat_btn.click(new_conversation, None, chatbot, queue=False)
 
-    return "", history, chat_id
+demo.queue()
 
-
-def new_chat():
-    return [], None
-
-
-with gr.Blocks(title="AI Assistant") as demo:
-
-    gr.Markdown("# 🤖 AI Assistant")
-
-    chat_id = gr.State(None)
-
-    chatbot = gr.Chatbot(
-        label="Conversation",
-        height=600,
-    )
-
-    with gr.Row():
-        msg = gr.Textbox(
-            placeholder="Type your message...",
-            scale=8,
-        )
-
-        send = gr.Button("Send", scale=1)
-
-    clear = gr.Button("🆕 New Chat")
-
-    send.click(
-        chat,
-        inputs=[
-            msg,
-            chatbot,
-            chat_id,
-        ],
-        outputs=[
-            msg,
-            chatbot,
-            chat_id,
-        ],
-    )
-
-    msg.submit(
-        chat,
-        inputs=[
-            msg,
-            chatbot,
-            chat_id,
-        ],
-        outputs=[
-            msg,
-            chatbot,
-            chat_id,
-        ],
-    )
-
-    clear.click(
-        new_chat,
-        outputs=[
-            chatbot,
-            chat_id,
-        ],
-    )
-
-demo.launch()
+if __name__ == "__main__":
+    demo.launch()
