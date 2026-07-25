@@ -120,7 +120,7 @@ async def chat(
         bot_type = routing["intent"]
         chat_obj = models.Chat(
             user_id=current_user.id,
-            title=request.message[:50],
+            title=request.message[:75],
             bot_type=bot_type,
         )
         db.add(chat_obj)

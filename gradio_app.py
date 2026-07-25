@@ -1,3 +1,22 @@
+"""
+Gradio chat interface that talks to the real FastAPI backend (/chat) instead
+of calling the bot logic directly. Shows which bot handled each message
+(psychological vs learning) and reveals the answer progressively.
+
+Note on "streaming": the FastAPI /chat endpoint currently returns the full
+answer in one response (it needs the complete text before it can save it to
+the DB), not token-by-token. This simulates a stream by revealing the
+already-complete answer word by word — same UX feel, no backend rewrite
+needed. For genuine token-level streaming end to end, main.py's /chat
+endpoint would need to become a real streaming endpoint (Server-Sent Events)
+that streams from Ollama as it generates — a separate, bigger change.
+
+Requires:
+    pip install gradio requests
+
+Run (with your FastAPI server already running on port 8000):
+    python gradio_app.py
+"""
 
 import time
 
@@ -5,14 +24,19 @@ import gradio as gr
 import requests
 
 API_BASE_URL = "http://localhost:8000"  # assumes your Docker container publishes port 8000 -> 8000
-STREAM_DELAY = 0.1  # seconds between words; tune for faster/slower reveal
+STREAM_DELAY = 0.02  # seconds between words; tune for faster/slower reveal
 
 INTENT_LABELS = {
-    "psychological": " **تم اختيار: المساعد النفسي** _(Psychological Assistant)_",
-    "learning": " **تم اختيار: المساعد التعليمي** _(Learning Assistant)_",
+    "psychological": "🧭 **تم اختيار: المساعد النفسي** _(Psychological Assistant)_",
+    "learning": "🧭 **تم اختيار: المساعد التعليمي** _(Learning Assistant)_",
 }
 
-
+# Holds the current chat_id so follow-up messages continue the same
+# conversation server-side (bot_type stays locked, memory stays bounded).
+# NOTE: this is a single shared variable, fine for one person testing
+# locally. It is NOT per-browser-session-safe for multiple simultaneous
+# users — each user would share/clobber the same chat_id. Use gr.State
+# instead if this ever needs to support multiple concurrent testers.
 _session = {"chat_id": None}
 
 
@@ -48,6 +72,7 @@ def call_chat_api(message: str) -> dict:
 
     resp.raise_for_status()
     data = resp.json()
+    print("RECEIVED bot_type:", data.get("bot_type"), "| chat id:", data.get("id"))  # temporary debug line
     _session["chat_id"] = data["id"]
     return data
 
@@ -101,11 +126,11 @@ def new_conversation():
     return []
 
 
-with gr.Blocks(title="Family Support & Learning Assistant") as demo:
+with gr.Blocks(title="GloryMinds Bot") as demo:
     gr.Markdown(
         "# Family Support & Learning Assistant\n"
         "Ask about your child's schoolwork, or share a parenting/emotional concern — "
-        f"you'll be routed to the right assistant automatically."
+        f"you'll be routed to the right assistant automatically. _(Live API: {API_BASE_URL})_"
     )
     chatbot = gr.Chatbot(height=500)
     msg = gr.Textbox(placeholder="Type your message and press Enter...", show_label=False)
