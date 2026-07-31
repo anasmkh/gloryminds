@@ -50,6 +50,7 @@ class Message(Base):
     chat_id = Column(String, ForeignKey("chats.id"), nullable=False)
     role = Column(String, nullable=False)  # "user" or "assistant"
     content = Column(Text, nullable=False)
+    bot_type = Column(String, nullable=True)  # which bot produced this message, "psychological"/"learning"/None for user msgs
     created_at = Column(DateTime, default=datetime.utcnow)
 
     chat = relationship("Chat", back_populates="messages")

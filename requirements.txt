@@ -8,3 +8,4 @@ requests
 qdrant-client
 llama-index-core
 llama-index-llms-ollama
+gradio
