@@ -115,9 +115,6 @@ def search_qdrant(client: QdrantClient, question: str, grade: str, subject: str,
 
 
 def build_contextual_query(message: str, memory: list) -> str:
-    """Fold in recent user turns so follow-ups like 'what about chapter 2?'
-    still retrieve the right material on their own. `memory` is a list of
-    {"role", "content"} dicts, most recent last."""
     if not memory:
         return message
     last_user_turns = [m["content"] for m in memory if m["role"] == "user"][-2:]

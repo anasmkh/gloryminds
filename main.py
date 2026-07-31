@@ -71,15 +71,11 @@ MAX_MESSAGES = MAX_TURNS * 2
 
 
 def build_memory_messages(db_messages: List[models.Message]) -> List[dict]:
-    """Bounded memory buffer built from DB history: last MAX_MESSAGES only."""
     trimmed = db_messages[-MAX_MESSAGES:] if len(db_messages) > MAX_MESSAGES else db_messages
     return [{"role": m.role, "content": m.content} for m in trimmed]
 
 
 def build_chat_engine(db_messages: List[models.Message]) -> SimpleChatEngine:
-    """Rebuild the psychological bot's chat engine, seeded with bounded
-    memory from stored history (llama-index's own token_limit already
-    bounds this further at the token level)."""
     memory_messages = build_memory_messages(db_messages)
     history = [
         ChatMessage(
@@ -133,7 +129,7 @@ async def chat(
         engine_instance = build_chat_engine(chat_obj.messages)
         response = engine_instance.chat(request.message)
         answer_text = str(response)
-    else:  # "learning"
+    else: 
         if qdrant_client is None:
             answer_text = "The learning assistant isn't available right now."
         else:
@@ -199,10 +195,6 @@ async def delete_chat(
     db.delete(chat_obj)
     db.commit()
 
-
-@app.get("/")
-async def root():
-    return {"status": "running"}
 
 
 if __name__ == "__main__":

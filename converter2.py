@@ -1,31 +1,3 @@
-"""
-Step 1: Convert all grade/subject PDFs into Markdown files.
-
-Expected input layout:
-    raw_pdfs/
-        7th/
-            math/
-                chapter1.pdf
-                chapter2.pdf
-            arabic/
-                ...
-        8th/
-            ...
-        9th/
-            ...
-
-Output layout (mirrors input):
-    processed_md/
-        7th/
-            math/
-                chapter1.md
-                chapter2.md
-            ...
-
-Usage:
-    python convert_pdfs_to_md.py --input raw_pdfs --output processed_md
-"""
-
 import argparse
 from pathlib import Path
 
@@ -34,9 +6,6 @@ import pymupdf4llm
 
 
 def extract_plain_text_fallback(pdf_path: Path) -> str:
-    """Fallback for files where pymupdf4llm's table-aware parser crashes.
-    Produces plain text per page, still usable for chunking/RAG, just
-    without fancy table/markdown structure."""
     doc = fitz.open(str(pdf_path))
     pages = []
     for page_num, page in enumerate(doc, start=1):
@@ -65,7 +34,7 @@ def convert_all(input_dir: Path, output_dir: Path, only: list[str] | None = None
     successes, failures, skipped = 0, [], 0
 
     for pdf_path in pdf_files:
-        relative = pdf_path.relative_to(input_dir)  # e.g. 8th/math/chapter1.pdf
+        relative = pdf_path.relative_to(input_dir) 
         md_relative = relative.with_suffix(".md")
         md_path = output_dir / md_relative
 

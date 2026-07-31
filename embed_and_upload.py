@@ -22,10 +22,6 @@ BASE_DELAY = 5
 
 
 def with_retries(fn, *args, description="operation", **kwargs):
-    """Call fn(*args, **kwargs), retrying on connection-related failures
-    with exponential backoff. Raises the last exception if all retries
-    are exhausted, so the caller can decide what to do (usually: save
-    progress and exit cleanly)."""
     last_exception = None
     for attempt in range(1, MAX_RETRIES + 1):
         try:
@@ -78,8 +74,6 @@ def ensure_collection(client: QdrantClient, name: str):
 
 
 def get_existing_ids(client: QdrantClient, collection_name: str, ids: list[str]) -> set:
-    """Check which of these chunk IDs are already uploaded, so reruns after
-    a crash/connection drop skip them instead of redoing the work."""
     if not ids:
         return set()
     records = with_retries(
@@ -95,7 +89,7 @@ def get_existing_ids(client: QdrantClient, collection_name: str, ids: list[str])
 
 def main(input_path: Path, collection_name: str):
     qdrant_url = os.environ.get("QDRANT_URL")
-    qdrant_api_key = os.environ.get("QDRANT_API_KEY")  # optional, e.g. not needed for some self-hosted setups
+    qdrant_api_key = os.environ.get("QDRANT_API_KEY")  
     if not qdrant_url:
         sys.exit("Missing QDRANT_URL environment variable. See script docstring.")
 
@@ -160,9 +154,6 @@ def main(input_path: Path, collection_name: str):
         flush_batch()  # upload any remainder
 
     except Exception as e:
-        # Qdrant connection died and all retries were exhausted mid-run.
-        # Whatever was already upserted is safely stored; just rerun this
-        # script later and it will pick up exactly where this left off.
         print(f"\nStopped: Qdrant became unreachable after {MAX_RETRIES} retries ({e}).")
         print(f"{uploaded}/{len(chunks_to_process)} new chunks were uploaded before the failure.")
         print("Progress is saved in Qdrant - just rerun this script later to resume.")

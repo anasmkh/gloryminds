@@ -1,12 +1,3 @@
-"""
-Intent router: decides whether an incoming message should go to the
-psychological support bot or the learning/curriculum bot.
-
-Usage (standalone test):
-    python router.py "my daughter is anxious about her exams"
-    python router.py "explain photosynthesis for 8th grade"
-"""
-
 import json
 import os
 import sys
@@ -64,7 +55,7 @@ def classify_intent(message: str) -> dict:
         result = {"intent": "psychological", "confidence": "low"}
 
     if result.get("intent") not in VALID_INTENTS:
-        result["intent"] = "psychological"  # safe default: emotional topics need care either way
+        result["intent"] = "psychological" 
 
     return result
 
