@@ -48,9 +48,9 @@ class Message(Base):
 
     id = Column(String, primary_key=True, default=gen_uuid)
     chat_id = Column(String, ForeignKey("chats.id"), nullable=False)
-    role = Column(String, nullable=False)  # "user" or "assistant"
+    role = Column(String, nullable=False)  
     content = Column(Text, nullable=False)
-    bot_type = Column(String, nullable=True)  # which bot produced this message, "psychological"/"learning"/None for user msgs
+    bot_type = Column(String, nullable=True) 
     created_at = Column(DateTime, default=datetime.utcnow)
 
     chat = relationship("Chat", back_populates="messages")
